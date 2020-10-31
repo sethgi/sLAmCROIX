@@ -6,26 +6,51 @@ Authors: Seth Isaacson
 import pandas as pd
 import argparse
 import os
+import copy
 
 class Map:
     def __init__(self, data):
         self.data = data
+        self.landmarkDict = self.data.set_index('Subject').to_dict('index')
+        print(self.landmarkDict)
 
     def __getitem__(self, key):
-        return self.data[key]
+        return self.landmarkDict[subjectID]
+
+    def getLandmarkLocation(self, subjectID):
+        return self.landmarkDict[subjectID]
 
 class Robot:
+    # All arguments are corresponding pandas dataframes
     def __init__(self, groundtruth, measurements, odometry, barcodes):
         self.groundTruth = groundtruth
         self.measurements = measurements
         self.odometry = odometry
-        self.barcodes =barcodes
+        self.barcodes = barcodes
+
+        # List of data in order. Serves as a backup to dataQueue
+        self.dataList = []
+
+        # List of data we will pop from.
+        self.dataQueue = []
+
         self.buildDict()
+
+    # Get next data. May include one or more of ground truth, measurement, and barcode
+    def getNext(self):
+        return self.dataQueue.pop(0)
+
+    def empty(self):
+        return len(self.dataQueue == 0)
+
+    def reset(self):
+        self.dataQueue = copy.deepcopy(self.dataList)
 
     def buildDict(self):
         self.dataQueue = []
         self.dataDict = {}
         barcodeDict = {}
+        
         for row in self.barcodes.itertuples():
             barcodeDict[row.Barcode] = row.Subject
 
@@ -57,7 +82,9 @@ class Robot:
 
         for t in sorted(self.dataDict.keys()):
             dict = self.dataDict[t]
-            self.dataQueue.append(dict)
+            self.dataList.append(dict)
+
+        self.reset()
 
 class Data:
     def __init__(self, directory):
