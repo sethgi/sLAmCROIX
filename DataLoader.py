@@ -50,7 +50,7 @@ class Robot:
         self.dataQueue = []
         self.dataDict = {}
         barcodeDict = {}
-        
+
         for row in self.barcodes.itertuples():
             barcodeDict[row.Barcode] = row.Subject
 
@@ -156,3 +156,5 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     data = Data(args.directory)
+
+    entry = data.robots[0].getNext()
