@@ -7,12 +7,13 @@ import pandas as pd
 import argparse
 import os
 import copy
+import numpy as np
+import pickle
 
 class Map:
     def __init__(self, data):
         self.data = data
         self.landmarkDict = self.data.set_index('Subject').to_dict('index')
-        print(self.landmarkDict)
 
     def __getitem__(self, key):
         return self.landmarkDict[subjectID]
@@ -41,7 +42,10 @@ class Robot:
         return self.dataQueue.pop(0)
 
     def empty(self):
-        return len(self.dataQueue == 0)
+        return len(self.dataQueue) == 0
+
+    def size(self):
+        return len(self.dataQueue)
 
     def reset(self):
         self.dataQueue = copy.deepcopy(self.dataList)
@@ -50,6 +54,7 @@ class Robot:
         self.dataQueue = []
         self.dataDict = {}
         barcodeDict = {}
+        self.groundTruthPosition = []
 
         for row in self.barcodes.itertuples():
             barcodeDict[row.Barcode] = row.Subject
@@ -67,16 +72,22 @@ class Robot:
                 self.dataDict[time] = {"Time": time, "GroundTruth": (x,y,heading), "Measurements": [], "Odometry": None}
             else:
                 self.dataDict[time]["GroundTruth"] = (x,y,heading)
+            self.groundTruthPosition.append((time,x,y,heading))
 
         for row in self.measurements.itertuples():
-            if row.Barcode not in barcodeDict:
-                print("Unrecogonized Barcode: {}. Skipping".format(row.Barcode))
+            subject = None
+            barcode = row.Barcode
+            if barcode not in barcodeDict:
+                print("Unrecogonized Barcode: {}. Skipping".format(barcode))
+                continue
             else:
-                subject = barcodeDict[row.Barcode]
+                subject = barcodeDict[barcode]
 
-            time = row.Time
+            time = float(row.Time)
             if time not in self.dataDict:
-                self.dataDict[time] = {"Time": time, "GroundTruth": None, "Measurements": [(subject, row.Range, row.Bearing)], "Odometry": None}
+                self.dataDict[time] = {"Time": time, "GroundTruth": None, \
+                        "Measurements": [(subject, row.Range, row.Bearing)], \
+                        "Odometry": None}
             else:
                 self.dataDict[time]["Measurements"].append((subject, row.Range, row.Bearing))
 
@@ -90,22 +101,22 @@ class Data:
     def __init__(self, directory):
         self.directory = directory
         self.loadAllData()
+        print("=== Data Loaded ===")
 
 
     def createDfFromFile(self, fname, headers):
-        i = 0
-        data = []
-        with open(fname) as file:
-            for line in file:
-                if i < 4:
-                    i += 1
-                    continue
-                i += 1
-                data.append(tuple(line.split()))
-
-
-        df = pd.DataFrame(data, columns = headers)
-        return df
+        # i = 0
+        # data = []
+        # with open(fname) as file:
+        #     for line in file:
+        #         if i < 4:
+        #             i += 1
+        #             continue
+        #         i += 1
+        #         data.append(tuple(line.split()))
+        #
+        # df = pd.DataFrame(data, columns = headers)
+        return pd.read_table(fname, names=headers, skiprows=4)
 
     def loadAllData(self):
         files = os.scandir(self.directory)
@@ -116,6 +127,9 @@ class Data:
         self.robotOdometry = [None for _ in range(self.numRobots)]
 
         i = 0
+
+        if self.directory[-1] != '/':
+            self.directory += "/"
 
         for file in os.scandir(self.directory):
             headers = None
@@ -156,5 +170,25 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     data = Data(args.directory)
-
-    entry = data.robots[0].getNext()
+    pickle.dump(data, open("Jar/dataset1.pkl", "wb"))
+    #
+    # robotData = data.robots[0]
+    #
+    # dict = robotData.dataDict
+    #
+    # range = []
+    # bearing = []
+    # while not robotData.empty():
+    #     data = robotData.getNext()
+    #     measurements = data["Measurements"]
+    #     t = data["Time"]
+    #     if measurements == [] or t < 1248273512.011 or t > 1248273518.329:
+    #         continue
+    #     for m in measurements:
+    #         if m[0] == 11:
+    #             range.append(m[1])
+    #             bearing.append(m[2])
+    # print(range)
+    # print(bearing)
+    # print("Range Var: ", np.var(range))
+    # print("Bearing Var: ", np.var(bearing))
