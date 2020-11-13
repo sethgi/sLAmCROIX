@@ -15,7 +15,7 @@ class Map:
         self.data = data
         self.landmarkDict = self.data.set_index('Subject').to_dict('index')
 
-    def __getitem__(self, key):
+    def __getitem__(self, subjectID):
         return self.landmarkDict[subjectID]
 
     def getLandmarkLocation(self, subjectID):
@@ -92,7 +92,7 @@ class Robot:
                 self.dataDict[time]["Measurements"].append((subject, row.Range, row.Bearing))
 
         for t in sorted(self.dataDict.keys()):
-            dict = self.dataDict[t]
+            dict = self.dataDict[t]    
             self.dataList.append(dict)
 
         self.reset()
@@ -105,17 +105,6 @@ class Data:
 
 
     def createDfFromFile(self, fname, headers):
-        # i = 0
-        # data = []
-        # with open(fname) as file:
-        #     for line in file:
-        #         if i < 4:
-        #             i += 1
-        #             continue
-        #         i += 1
-        #         data.append(tuple(line.split()))
-        #
-        # df = pd.DataFrame(data, columns = headers)
         return pd.read_table(fname, names=headers, skiprows=4)
 
     def loadAllData(self):
@@ -161,7 +150,7 @@ class Data:
             groundTruth = self.robotGroundTruth[i]
             measurements = self.robotMeasurements[i]
             odometry = self.robotOdometry[i]
-            self.robots.append(Robot(groundTruth, measurements, odometry, self.barcodes))
+            self.robots.append(copy.deepcopy(Robot(groundTruth, measurements, odometry, self.barcodes)))
 
 
 if __name__ == '__main__':

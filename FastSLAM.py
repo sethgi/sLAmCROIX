@@ -27,6 +27,8 @@ class FastSLAM:
         self.robotStates = []
         self.landmarks = []
 
+        self.timeSeries = []
+
     def createParticles(self, n):
         for _ in range(n):
             # x = np.random.rand()*10-5
@@ -35,45 +37,69 @@ class FastSLAM:
             x = 3.5732324
             y = -3.3328387
             theta = 2.3408
-            p = Particle(self.n, [x,y,theta])
+            p = Particle(self.n, [x,y,theta], self.data)
             self.particles.append(p)
 
     def runFastSLAM(self):
         robot1Data = self.data.robots[0]
 
-        prevTime = 0
+        count = 0
+        dt = 0
+        prevOdomTime = robot1Data.odometry["Time"][0]
 
         while not robot1Data.empty():
             keyFrame = robot1Data.getNext()
-            t = keyFrame["Time"]
+
             odometry = keyFrame["Odometry"]
             measurements = keyFrame["Measurements"]
 
-            dt = t - prevTime
-            prevTime = t
+            validMeasurements = []
+            for m in measurements:
+                subject = m[0]
+                if subject > 5:
+                    validMeasurements.append(m)
+
+            if validMeasurements == [] or odometry is None:
+                continue
+
+            t = keyFrame["Time"]
+
+            self.timeSeries.append(t)
 
             # Move population
-            for p in self.particles:
-                if odometry is not None:
+            if odometry is not None:
+                dt = t - prevOdomTime
+                if(dt > 1):
+                    print("DT: ", dt)
+                    print(t)
+                    exit()
+                for p in self.particles:
                     p.propagateMotion(odometry, dt)
-                if measurements != []:
-                    for m in measurements:
-                        p.correct(m)
+                prevOdomTime = t
+            #
+            # else:
+            #     for p in self.particles:
+            #         for m in validMeasurements:
+            #             p.correct(m)
+                # Resample
+                weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
+                weightSum = sum(weights)
+                if weightSum != 0:
+                    for i in range(len(weights)):
+                        old = weights[i]
+                        weights[i] /= weightSum
+                else:
+                    weights = [1/self.n for _ in range(self.n)]
 
-            # Resample
-            weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
-            weightSum = sum(weights)
-            if weightSum != 0:
-                for i in range(len(weights)):
-                    old = weights[i]
-                    weights[i] /= weightSum
-            else:
-                weights = [1/self.n for _ in range(self.n)]
-            particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
-            self.particles = [self.particles[i] for i in particleIndices]
+                particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
+
+                self.particles = [self.particles[i] for i in particleIndices]
 
             self.stateLogs.append(copy.deepcopy(self.getStateMaxWeight()))
 
+            count += 1
+        plt.plot(self.timeSeries)
+        plt.show()
 
     def runSlowSLAM(self):
         delay(1000000)
@@ -93,10 +119,25 @@ class FastSLAM:
 
         return state
 
+    def getStateAvg(self):
+        state = State()
+
+        xPos = [p.robotState[0] for p in self.particles]
+        yPos = [p.robotState[1] for p in self.particles]
+        thPos = [p.robotState[2] for p in self.particles]
+
+        # TODO: Hack because all EKFS have ground truth right now
+        for landmark in self.particles[0].landmarkEKFs:
+            position = self.particles[0].landmarkEKFs[landmark].stateEstimate
+            state.landmarks[landmark] = position
+
+        state.robotState = [np.average(xPos), np.average(yPos), np.average(thPos)]
+        return state
+
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", 20)
+    slam = FastSLAM("Jar/dataset1.pkl", 1)
     slam.runFastSLAM()
 
     stateEstimates = slam.stateLogs
@@ -105,41 +146,58 @@ if __name__ == '__main__':
     yData = [s.robotState[1] for s in stateEstimates]
     thetaData = [s.robotState[2] for s in stateEstimates]
 
+
     groundTruth = slam.data.robots[0].groundTruthPosition
+
+
+    def wrapToPi(th):
+        th = np.fmod(th, 2*np.pi)
+        if th >= np.pi:
+            th -= 2*np.pi
+
+        if th <= -np.pi:
+            th += 2*np.pi
+        return th
 
     timeTruth = [g[0] for g in groundTruth]
     xTruth = [g[1] for g in groundTruth]
     yTruth = [g[2] for g in groundTruth]
-    theTruth = [g[3] for g in groundTruth]
+    theTruth = [wrapToPi(g[3]) for g in groundTruth]
 
     fig, ax = plt.subplots()
 
     # Plotting Yaw
-    timeData = sorted(slam.data.robots[0].dataDict.keys())
-    plt.plot(timeData, thetaData)
-    plt.plot(timeTruth, theTruth)
-    plt.figure()
 
+    minTime = min(slam.timeSeries[0], timeTruth[0])
+    plt.plot(np.array(slam.timeSeries)-minTime, thetaData, label="Estimated Angle")
+    plt.plot(np.array(timeTruth)-minTime, theTruth, label="Ground Truth Angle")
+    plt.title("Theta Tracking")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Heading (rad)")
+
+    plt.figure()
     plt.plot(xData, yData, label="Estimated Path")
     plt.plot(xTruth, yTruth, label="True Path")
+
+    landmarks = stateEstimates[-1].landmarks
+    xLandmarks = []
+    yLandmarks = []
+
+    for l in landmarks.values():
+        xLandmarks.append(l[0])
+        yLandmarks.append(l[1])
+
+    xLandmarksTrue = []
+    yLandmarksTrue = []
+
+    for l in slam.data.map.landmarkDict.values():
+        xLandmarksTrue.append(l["X"])
+        yLandmarksTrue.append(l["Y"])
+
+    plt.scatter(xLandmarks, yLandmarks, label="Estimated Landmarks", color='g')
+    plt.scatter(xLandmarksTrue, yLandmarksTrue, label="Ground Truth Landmarks", color='r')
+    plt.xlabel("X (meters)")
+    plt.ylabel("Y (meters)")
+    plt.title("SLAM Results")
     plt.legend()
     plt.show()
-
-    # def init():
-    #     plt.ylim(-14, 4)
-    #     plt.xlim(-4,14)
-    #     ax.plot([0,10,10,0, 0], [0, 0, -10, -10, 0], label= "Expected Path")
-    #     plt.xlabel("X Coordinate (m)")
-    #     plt.ylabel("Y Coordinate (m)")
-    # # return ln,
-    #
-    # def update(frame):
-    #     P = state_estimates[frame]
-    #     ln.set_xdata([p[0] for p in P])
-    #     ln.set_ydata([p[1] for p in P])
-    #     return fig,
-    #
-    # animate = animation.FuncAnimation(fig, update, frames=range(len(state_estimates)),\
-    #  init_func=init, interval=10)
-    # plt.legend()
-    # animate.save('./animation.gif',writer='imagemagick', fps=10)
