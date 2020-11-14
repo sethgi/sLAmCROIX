@@ -25,10 +25,10 @@ class Particle:
         self.n = n
         self.data = data
 
-    # Control = {Time: , }
+    # Control =
     def propagateMotion(self, control, dt):
-        velocity = control[0] + np.random.normal(0, self.velocitySigma)
-        angularVelocity = control[1] + np.random.normal(0, self.angleSigma)
+        velocity = control[1] + np.random.normal(0, self.velocitySigma)
+        angularVelocity = control[2] + np.random.normal(0, self.angleSigma)
 
         xVel = velocity*np.cos(self.robotState[self.THETA_IDX])
         yVel = velocity*np.sin(self.robotState[self.THETA_IDX])
@@ -42,9 +42,9 @@ class Particle:
 
     # Measurement = [subject, range, bearing]
     def correct(self, measurement):
-        subject = measurement[0]
-        range = measurement[1]
-        bearing = measurement[2]
+        subject = measurement[1]
+        range = measurement[2]
+        bearing = measurement[3]
 
         if subject <= 5:
             raise Exception("Invalid Subject")

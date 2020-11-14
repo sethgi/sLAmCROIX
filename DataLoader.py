@@ -24,10 +24,10 @@ class Map:
 class Robot:
     # All arguments are corresponding pandas dataframes
     def __init__(self, groundtruth, measurements, odometry, barcodes):
-        self.groundTruth = groundtruth
-        self.measurements = measurements
-        self.odometry = odometry
-        self.barcodes = barcodes
+        self.groundTruthDF = groundtruth
+        self.measurementsDF = measurements
+        self.odometryDF = odometry
+        self.barcodesDF = barcodes
 
         # List of data in order. Serves as a backup to dataQueue
         self.dataList = []
@@ -35,46 +35,56 @@ class Robot:
         # List of data we will pop from.
         self.dataQueue = []
 
+        self.odometry = []
+        self.measurements = []
+        self.groundTruthPosition = []
+
+        self.robotData = []
+
         self.buildDict()
 
     # Get next data. May include one or more of ground truth, measurement, and barcode
     def getNext(self):
-        return self.dataQueue.pop(0)
+        return self.robotData.pop(0)
 
     def empty(self):
-        return len(self.dataQueue) == 0
+        return len(self.robotData) == 0
 
     def size(self):
-        return len(self.dataQueue)
+        return len(self.robotData)
 
     def reset(self):
-        self.dataQueue = copy.deepcopy(self.dataList)
+        self.dataQueue = copy.deepcopy(self.robotData)
 
     def buildDict(self):
         self.dataQueue = []
         self.dataDict = {}
         barcodeDict = {}
-        self.groundTruthPosition = []
 
-        for row in self.barcodes.itertuples():
+        for row in self.barcodesDF.itertuples():
             barcodeDict[row.Barcode] = row.Subject
 
-        for row in self.odometry.itertuples():
-            time = row.Time
-            self.dataDict[time] = {"Time": time, "GroundTruth": None, "Measurements": [], "Odometry":(row.Velocity, row.AngularVelocity)}
-
-        for row in self.groundTruth.itertuples():
+        for row in self.groundTruthDF.itertuples():
             time = row.Time
             x = row.X
             y = row.Y
             heading = row.Heading
-            if time not in self.dataDict:
-                self.dataDict[time] = {"Time": time, "GroundTruth": (x,y,heading), "Measurements": [], "Odometry": None}
-            else:
-                self.dataDict[time]["GroundTruth"] = (x,y,heading)
             self.groundTruthPosition.append((time,x,y,heading))
 
-        for row in self.measurements.itertuples():
+        i = 0
+        groundTruthTimes = np.asarray([g[0] for g in self.groundTruthPosition])
+        for row in self.odometryDF.itertuples():
+            time = row.Time
+            # yawIdx = np.abs(groundTruthTimes - time).argmin()
+            # groundTruthYaw = self.groundTruthPosition[yawIdx][3]
+            #
+            # # Rounded up from what was found with lab 3 data:
+            # yawMeas = groundTruthYaw + np.random.normal(0, 0.001)
+
+            self.odometry.append((time, row.Velocity, row.AngularVelocity))
+
+
+        for row in self.measurementsDF.itertuples():
             subject = None
             barcode = row.Barcode
             if barcode not in barcodeDict:
@@ -83,16 +93,35 @@ class Robot:
             else:
                 subject = barcodeDict[barcode]
 
-            time = float(row.Time)
-            if time not in self.dataDict:
-                self.dataDict[time] = {"Time": time, "GroundTruth": None, \
-                        "Measurements": [(subject, row.Range, row.Bearing)], \
-                        "Odometry": None}
+            time = row.Time
+            self.measurements.append((time, subject, row.Range, row.Bearing))
+
+        # Merge measurements and odometry
+        odomPtr = 0
+        measPtr = 0
+        self.robotData = []
+        while odomPtr < len(self.odometry) and measPtr < len(self.measurements):
+
+            # If odometry is earlier (or same)
+            if self.odometry[odomPtr][0] <= self.measurements[measPtr][0]:
+                self.robotData.append(('odometry', self.odometry[odomPtr]))
+                odomPtr += 1
             else:
-                self.dataDict[time]["Measurements"].append((subject, row.Range, row.Bearing))
+                self.robotData.append(('measurement', self.measurements[measPtr]))
+                measPtr += 1
+
+        if odomPtr < len(self.odometry):
+            for i in range(odomPtr, len(self.odometry)):
+                self.robotData.append(('odometry', self.odometry[i]))
+                odomPtr += 1
+        elif measPtr < len(self.measurements):
+            for i in range(measPtr, len(self.measurements)):
+                self.robotData.append(('measurement', self.measurements[i]))
+                measPtr += 1
+
 
         for t in sorted(self.dataDict.keys()):
-            dict = self.dataDict[t]    
+            dict = self.dataDict[t]
             self.dataList.append(dict)
 
         self.reset()

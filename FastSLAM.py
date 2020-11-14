@@ -45,59 +45,44 @@ class FastSLAM:
 
         count = 0
         dt = 0
-        prevOdomTime = robot1Data.odometry["Time"][0]
+        prevOdomTime = robot1Data.odometry[0][0]
 
         while not robot1Data.empty():
             keyFrame = robot1Data.getNext()
+            t = keyFrame[1][0]
 
-            odometry = keyFrame["Odometry"]
-            measurements = keyFrame["Measurements"]
-
-            validMeasurements = []
-            for m in measurements:
-                subject = m[0]
-                if subject > 5:
-                    validMeasurements.append(m)
-
-            if validMeasurements == [] or odometry is None:
-                continue
-
-            t = keyFrame["Time"]
-
-            self.timeSeries.append(t)
-
-            # Move population
-            if odometry is not None:
+            if keyFrame[0] == 'odometry':
+                odometry = keyFrame[1]
                 dt = t - prevOdomTime
-                if(dt > 1):
-                    print("DT: ", dt)
-                    print(t)
-                    exit()
                 for p in self.particles:
                     p.propagateMotion(odometry, dt)
                 prevOdomTime = t
-            #
-            # else:
-            #     for p in self.particles:
-            #         for m in validMeasurements:
-            #             p.correct(m)
-                # Resample
-                weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
-                weightSum = sum(weights)
-                if weightSum != 0:
-                    for i in range(len(weights)):
-                        old = weights[i]
-                        weights[i] /= weightSum
-                else:
-                    weights = [1/self.n for _ in range(self.n)]
+            else:
+                measurement = keyFrame[1]
+                subject = measurement[1]
+                if subject > 5:
+                    for p in self.particles:
+                        p.correct(measurement)
 
-                particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
+                    weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
+                    weightSum = sum(weights)
+                    if weightSum != 0:
+                        for i in range(len(weights)):
+                            old = weights[i]
+                            weights[i] /= weightSum
+                    else:
+                        weights = [1/self.n for _ in range(self.n)]
 
-                self.particles = [self.particles[i] for i in particleIndices]
+                    particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
+
+                    self.particles = [self.particles[i] for i in particleIndices]
+
+            self.timeSeries.append(t)
 
             self.stateLogs.append(copy.deepcopy(self.getStateMaxWeight()))
 
             count += 1
+
         plt.plot(self.timeSeries)
         plt.show()
 
@@ -137,7 +122,7 @@ class FastSLAM:
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", 1)
+    slam = FastSLAM("Jar/dataset1.pkl", 25)
     slam.runFastSLAM()
 
     stateEstimates = slam.stateLogs
