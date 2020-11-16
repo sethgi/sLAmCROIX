@@ -6,6 +6,9 @@ import numpy as np
 import pickle
 import matplotlib.pyplot as plt
 import copy
+from matplotlib.patches import Ellipse
+import matplotlib.transforms as transforms
+import matplotlib.animation as animation
 
 class State:
     def __init__(self):
@@ -21,13 +24,19 @@ class FastSLAM:
 
         self.particles = []
 
-        self.createParticles(self.n)
-
         self.stateLogs = []
         self.robotStates = []
         self.landmarks = []
 
         self.timeSeries = []
+
+        self.stateEstimates = []
+
+        self.createParticles(self.n)
+
+        # once every this many time steps, record the entire state (SLOW!)
+        self.estimateSnapshotInterval = 10
+        self.snapshotCounter = 0
 
     def createParticles(self, n):
         for i in range(n):
@@ -39,6 +48,7 @@ class FastSLAM:
             theta = 2.3408
             p = Particle(self.n, [x,y,theta], self.data, i)
             self.particles.append(p)
+        self.stateEstimates.append(self.particles)
 
     def runFastSLAM(self):
         robot1Data = self.data.robots[0]
@@ -46,7 +56,11 @@ class FastSLAM:
         dt = 0
         prevOdomTime = robot1Data.odometry[0][0]
 
-        while not robot1Data.empty():
+        count = 0
+        while not robot1Data.empty() and count < 10000:
+            print(count, robot1Data.size())
+            count += 1
+
             keyFrame = robot1Data.getNext()
             t = keyFrame[1][0]
 
@@ -72,20 +86,21 @@ class FastSLAM:
                             weights[i] /= weightSum
                     else:
                         print("Weights were zero!!")
-                        exit()
+                        # exit()
                         weights = [1/self.n for _ in range(self.n)]
 
                     particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
-                    print(particleIndices)
-                    self.particles = [self.particles[i] for i in particleIndices]
-                    print([p.id for p in self.particles])
+                    # print(particleIndices)
+                    self.particles = [copy.deepcopy(self.particles[i]) for i in particleIndices]
+                    # print([p.id for p in self.particles])
+            self.stateLogs.append(copy.deepcopy(self.getStateAvg()))
 
             self.timeSeries.append(t)
 
-            self.stateLogs.append(copy.deepcopy(self.getStateMaxWeight()))
-
-        plt.plot(self.timeSeries)
-        plt.show()
+            if self.snapshotCounter == self.estimateSnapshotInterval:
+                self.snapshotCounter = 0
+                self.stateEstimates.append(copy.deepcopy(self.particles))
+            self.snapshotCounter += 1
 
     def runSlowSLAM(self):
         delay(1000000)
@@ -168,17 +183,19 @@ if __name__ == '__main__':
     landmarks = stateEstimates[-1].landmarks
     xLandmarks = []
     yLandmarks = []
-
-    for l in landmarks.values():
-        xLandmarks.append(l[0])
-        yLandmarks.append(l[1])
+    #
+    # for l in landmarks:
+    #     xLandmarks.append(landmarks[l][0])
+    #     yLandmarks.append(landmarks[l][1])
 
     xLandmarksTrue = []
     yLandmarksTrue = []
 
-    for l in slam.data.map.landmarkDict.values():
-        xLandmarksTrue.append(l["X"])
-        yLandmarksTrue.append(l["Y"])
+    for l in slam.data.map.landmarkDict:
+        # if l == 16:
+        lm = slam.data.map.landmarkDict[l]
+        xLandmarksTrue.append(lm["X"])
+        yLandmarksTrue.append(lm["Y"])
 
     plt.scatter(xLandmarks, yLandmarks, label="Estimated Landmarks", color='g')
     plt.scatter(xLandmarksTrue, yLandmarksTrue, label="Ground Truth Landmarks", color='r')
@@ -186,4 +203,41 @@ if __name__ == '__main__':
     plt.ylabel("Y (meters)")
     plt.title("SLAM Results")
     plt.legend()
+    plt.show()
+
+    """
+    Animation
+    """
+    fig, ax = plt.subplots()
+
+    ln, = plt.plot([], [], '.')
+
+
+    plt.plot(xData, yData, label="Estimated Path")
+
+    animationEstimates = []
+
+
+
+    def init():
+        plt.scatter(xLandmarksTrue, yLandmarksTrue, label="Ground Truth Landmarks", color='r')
+        plt.scatter(xLandmarks, yLandmarks, label="Estimated Landmarks", color='g')
+        plt.plot(xData, yData, label="Estimated Path")
+        plt.plot(xTruth, yTruth, label="True Path")
+        plt.xlabel("X Coordinate (m)")
+        plt.ylabel("Y Coordinate (m)")
+        plt.legend()
+    # return ln,
+    # print(len(slam.stateEstimates))
+    def update(frame):
+        particles = slam.stateEstimates[frame]
+        ln.set_xdata([p.robotState[0] for p in particles])
+        ln.set_ydata([p.robotState[1] for p in particles])
+        return fig,
+
+    animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)),\
+     init_func=init, interval=100)
+    plt.legend()
+    # animate.save('./correctBad.gif',writer='imagemagick', fps=10)
+
     plt.show()

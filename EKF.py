@@ -25,8 +25,8 @@ class EKF:
         robotTheta = robotState[2]
 
 
-        x = robotX + range*np.cos(robotTheta + bearing)
-        y = robotY + range*np.sin(robotTheta + bearing)
+        x = robotX + range*np.cos(self.wrapToPi(robotTheta) + self.wrapToPi(bearing))
+        y = robotY + range*np.sin(self.wrapToPi(robotTheta) + self.wrapToPi(bearing))
 
         # Running estimate
         self.stateEstimate = np.reshape(np.array([x,y]), (2,1))
@@ -53,7 +53,7 @@ class EKF:
     def measurementModel(self, robotState):
         robotX = robotState[0]
         robotY = robotState[1]
-        robotTheta = robotState[2]
+        robotTheta = self.wrapToPi(robotState[2])
 
         range = np.sqrt((robotX - self.stateEstimate[0])**2 + \
                         (robotY - self.stateEstimate[1])**2)
@@ -79,6 +79,7 @@ class EKF:
 
     # Correction step for EKF
     def correct(self, range, bearing, robotState, truth=None):
+
         predictedMeasurement = self.measurementModel(robotState)
         zHat = np.reshape(predictedMeasurement, (2,1))
 
@@ -90,20 +91,36 @@ class EKF:
             raise Exception("Singular whoopsies")
         Qinv = np.linalg.inv(Q)
 
+        # print("Q: ", Q)
+
         K = self.stateCovariance @ H.T @ Qinv
 
         zt = np.reshape(np.array([range, bearing]), (2,1))
 
-        self.stateEstimate = self.stateEstimate + K@(zt - zHat)
+        diff = zt - zHat
+
+        # https://stackoverflow.com/questions/7570808/how-do-i-calculate-the-difference-of-two-angle-measures/30887154
+        # angleDist = abs(zt[1] - zHat[1])%2*np.pi
+        # if angleDist > np.pi:
+        #     angleDist = 2*np.pi - angleDist
+        # sign = 1 if (zt[1] - zHat[1] >= 0 and zt[1] - zHat[1] <= np.pi) or \
+        #        (zt[1] - zHat[1] <=-np.pi and zt[1]- zHat[1]>= -2*np.pi)  \
+        #        else  -1
+        # angleDist *= sign
+
+        diff[1] = self.wrapToPi(diff[1])
+        # print("expected: ", zHat, "Actual: ", zt)
+        self.stateEstimate = self.stateEstimate + K@(diff)
         self.stateCovariance = (np.identity(2) - K @ H) @ self.stateCovariance
 
         self.stateEstimate = truth
 
         weight = np.linalg.det(2*np.pi*Q)**-.5 * \
-                    np.exp(-.5*(zt-zHat).T @ Qinv @ (zt-zHat))
+                    np.exp(-.5*(diff).T @ Qinv @ (diff))
 
         # print("Actual: ", zt.reshape((1,2)), " Expected: ", zHat.reshape((1,2)))
         # print(np.exp(-.5*(zt-zHat).T @ Qinv @ (zt-zHat)))
 
         # Note: Notation on z is inconsistent on p. 450
+        # print("weight ", weight)
         return weight

@@ -54,11 +54,11 @@ class Particle:
         truth = [truth["X"], truth["Y"]]
 
         if subject not in self.landmarkEKFs:
-            newEKF = EKF(self.robotState, range, bearing)
+            newEKF = EKF(copy.deepcopy(self.robotState), range, bearing)
             self.landmarkEKFs[subject] = newEKF
             self.weight = 1/self.n
         else:
-            self.weight = self.landmarkEKFs[subject].correct(range,bearing,self.robotState, truth)
+            self.weight = self.landmarkEKFs[subject].correct(range,bearing,copy.deepcopy(self.robotState), truth)
         return self.weight
 
     def wrapToPi(self, th):

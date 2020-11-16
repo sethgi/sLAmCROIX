@@ -94,7 +94,7 @@ class Robot:
                 subject = barcodeDict[barcode]
 
             time = row.Time
-            self.measurements.append((time, subject, row.Range, row.Bearing))
+            self.measurements.append((time, subject, row.Range, -1*row.Bearing))
 
         # Merge measurements and odometry
         odomPtr = 0
