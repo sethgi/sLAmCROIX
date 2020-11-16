@@ -119,7 +119,6 @@ class Robot:
                 self.robotData.append(('measurement', self.measurements[i]))
                 measPtr += 1
 
-
         for t in sorted(self.dataDict.keys()):
             dict = self.dataDict[t]
             self.dataList.append(dict)

@@ -18,7 +18,7 @@ class EKF:
         # Found by taking samples from robot 1 measuring landmark 11
         #   at times 1248273512.011 to 1248273518.329 (odometry was 0)
         # [.01, .001]
-        self.sigmaZ = np.diag([0.01, 0.01]) #range, bearing
+        self.sigmaZ = np.diag([0.1, 0.1]) #range, bearing
 
         robotX = robotState[0]
         robotY = robotState[1]
@@ -80,6 +80,8 @@ class EKF:
     # Correction step for EKF
     def correct(self, range, bearing, robotState, truth=None):
         predictedMeasurement = self.measurementModel(robotState)
+        zHat = np.reshape(predictedMeasurement, (2,1))
+
         H = self.computeMeasurementJacobian(range, bearing, robotState)
 
         Q = H @ self.stateCovariance @ H.T + self.sigmaZ
@@ -91,13 +93,17 @@ class EKF:
         K = self.stateCovariance @ H.T @ Qinv
 
         zt = np.reshape(np.array([range, bearing]), (2,1))
-        zHat = np.reshape(predictedMeasurement, (2,1))
 
         self.stateEstimate = self.stateEstimate + K@(zt - zHat)
         self.stateCovariance = (np.identity(2) - K @ H) @ self.stateCovariance
 
         self.stateEstimate = truth
 
+        weight = np.linalg.det(2*np.pi*Q)**-.5 * \
+                    np.exp(-.5*(zt-zHat).T @ Qinv @ (zt-zHat))
+
+        # print("Actual: ", zt.reshape((1,2)), " Expected: ", zHat.reshape((1,2)))
+        # print(np.exp(-.5*(zt-zHat).T @ Qinv @ (zt-zHat)))
+
         # Note: Notation on z is inconsistent on p. 450
-        return np.linalg.det(2*np.pi*Q)**-.5 * \
-               np.exp(-.5*(zt-zHat).T @ Qinv @ (zt-zHat))
+        return weight

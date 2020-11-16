@@ -30,20 +30,19 @@ class FastSLAM:
         self.timeSeries = []
 
     def createParticles(self, n):
-        for _ in range(n):
+        for i in range(n):
             # x = np.random.rand()*10-5
             # y = np.random.rand()*10-5
             # theta = (np.random.rand()*2*np.pi)-np.pi
             x = 3.5732324
             y = -3.3328387
             theta = 2.3408
-            p = Particle(self.n, [x,y,theta], self.data)
+            p = Particle(self.n, [x,y,theta], self.data, i)
             self.particles.append(p)
 
     def runFastSLAM(self):
         robot1Data = self.data.robots[0]
 
-        count = 0
         dt = 0
         prevOdomTime = robot1Data.odometry[0][0]
 
@@ -54,8 +53,10 @@ class FastSLAM:
             if keyFrame[0] == 'odometry':
                 odometry = keyFrame[1]
                 dt = t - prevOdomTime
+                # print("===== Particle states =====")
                 for p in self.particles:
                     p.propagateMotion(odometry, dt)
+                    # print(p.robotState)
                 prevOdomTime = t
             else:
                 measurement = keyFrame[1]
@@ -68,20 +69,20 @@ class FastSLAM:
                     weightSum = sum(weights)
                     if weightSum != 0:
                         for i in range(len(weights)):
-                            old = weights[i]
                             weights[i] /= weightSum
                     else:
+                        print("Weights were zero!!")
+                        exit()
                         weights = [1/self.n for _ in range(self.n)]
 
                     particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
-
+                    print(particleIndices)
                     self.particles = [self.particles[i] for i in particleIndices]
+                    print([p.id for p in self.particles])
 
             self.timeSeries.append(t)
 
             self.stateLogs.append(copy.deepcopy(self.getStateMaxWeight()))
-
-            count += 1
 
         plt.plot(self.timeSeries)
         plt.show()

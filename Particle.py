@@ -4,26 +4,28 @@ import copy
 import matplotlib.pyplot as plt
 
 class Particle:
-    def __init__(self, n, state=[0,0,0], data = None):
+    def __init__(self, n, state=[0,0,0], data = None, id = 0):
 
         self.robotState = state#x,y,theta
         self.robotState[2] = self.wrapToPi(self.robotState[2])
 
-        self.weight = 1
+        self.weight = 1/n
 
         # Subject number : EKF
         self.landmarkEKFs = {}
 
         # .01, .01
-        self.velocitySigma = 0.01
-        self.angleSigma = 0.01
+        self.velocitySigma = 0.1
+        self.angleSigma = 0.1
 
         self.X_IDX = 0
         self.Y_IDX = 1
         self.THETA_IDX = 2
 
         self.n = n
-        self.data = data
+        self.map = data.map
+
+        self.id = id
 
     # Control =
     def propagateMotion(self, control, dt):
@@ -40,7 +42,7 @@ class Particle:
         self.robotState[self.THETA_IDX] += angularVelocity*dt
         self.robotState[self.THETA_IDX] = self.wrapToPi(self.robotState[self.THETA_IDX])
 
-    # Measurement = [subject, range, bearing]
+    # Measurement = [time, subject, range, bearing]
     def correct(self, measurement):
         subject = measurement[1]
         range = measurement[2]
@@ -48,7 +50,7 @@ class Particle:
 
         if subject <= 5:
             raise Exception("Invalid Subject")
-        truth = self.data.map[subject]
+        truth = self.map[subject]
         truth = [truth["X"], truth["Y"]]
 
         if subject not in self.landmarkEKFs:
@@ -80,7 +82,7 @@ if __name__ == '__main__':
 
     for _ in range(50):
         for i in range(500):
-            particles[i].propagateMotion([0.075, 0.25], 0.01)
+            particles[i].propagateMotion([0, 0.075, 0.25], 0.01)
         onePartX.append(particles[0].robotState[0])
         onePartY.append(particles[0].robotState[1])
 
