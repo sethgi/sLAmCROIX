@@ -15,8 +15,8 @@ class Particle:
         self.landmarkEKFs = {}
 
         # .01, .01
-        self.velocitySigma = 0.025
-        self.angleSigma = 0.025
+        self.velocitySigma = 0.01
+        self.angleSigma = 0.075
 
         self.X_IDX = 0
         self.Y_IDX = 1

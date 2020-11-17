@@ -11,7 +11,7 @@ import matplotlib.transforms as transforms
 import matplotlib.animation as animation
 from tqdm import tqdm
 
-ROBOT_ID = 1
+ROBOT_ID = 0
 
 class State:
     def __init__(self):
@@ -81,7 +81,8 @@ class FastSLAM:
 
         # count = 0
         size = copy.deepcopy(robot1Data.size())
-        for i in tqdm(range(30000)):
+        print(size)
+        for i in tqdm(range(size)):
             # print(count, robot1Data.size())
             # count += 1
 
@@ -182,7 +183,7 @@ class FastSLAM:
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", 100)
+    slam = FastSLAM("Jar/dataset1.pkl", 150)
     slam.runFastSLAM()
 
     stateEstimates = slam.stateLogs
