@@ -15,8 +15,9 @@ class Particle:
         self.landmarkEKFs = {}
 
         # .01, .01
-        self.velocitySigma = 0.01
-        self.angleSigma = 0.075
+        self.velocitySigma = 0.005
+        self.angleSigma = 0.005
+        self.slipSigma = 0.045
 
         self.X_IDX = 0
         self.Y_IDX = 1
@@ -47,20 +48,17 @@ class Particle:
         velocity = control[1] + np.random.normal(0, self.velocitySigma)
         velocity = max(0, velocity)
 
-        angularVelocity = control[2] + np.random.normal(0, self.angleSigma)
+        slipVel = np.random.normal(0, self.slipSigma)
 
         thetaMeas += np.random.normal(0, self.angleSigma)
+        self.robotState[self.THETA_IDX] = self.wrapToPi(thetaMeas)
 
         xVel = velocity*np.cos(self.robotState[self.THETA_IDX])
         yVel = velocity*np.sin(self.robotState[self.THETA_IDX])
 
-        self.robotState[self.X_IDX] += xVel*dt
-        self.robotState[self.Y_IDX] += yVel*dt
+        self.robotState[self.X_IDX] += xVel*dt - slipVel*dt*np.sin(self.robotState[self.THETA_IDX])
+        self.robotState[self.Y_IDX] += yVel*dt + slipVel*dt*np.cos(self.robotState[self.THETA_IDX])
 
-        dTheta = angularVelocity*dt
-        self.robotState[self.THETA_IDX] += angularVelocity*dt
-
-        self.robotState[self.THETA_IDX] = self.wrapToPi(thetaMeas)
 
     # Measurement = [time, subject, range, bearing]
     def correct(self, measurement):
@@ -100,9 +98,9 @@ if __name__ == '__main__':
     onePartX = []
     onePartY = []
 
-    for _ in range(50):
+    for _ in range(5 ):
         for i in range(500):
-            particles[i].propagateMotion([0, 0.075, 0.25], 0.01)
+            particles[i].propagateMotion([0, 0.075, 0.25], np.radians(15), 0.01)
         onePartX.append(particles[0].robotState[0])
         onePartY.append(particles[0].robotState[1])
 

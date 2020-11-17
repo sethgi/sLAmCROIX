@@ -82,7 +82,7 @@ class FastSLAM:
         # count = 0
         size = copy.deepcopy(robot1Data.size())
         print(size)
-        for i in tqdm(range(size)):
+        for i in tqdm(range(20000)):
             # print(count, robot1Data.size())
             # count += 1
 
@@ -183,7 +183,7 @@ class FastSLAM:
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", 150)
+    slam = FastSLAM("Jar/dataset1.pkl", 100)
     slam.runFastSLAM()
 
     stateEstimates = slam.stateLogs
@@ -292,6 +292,6 @@ if __name__ == '__main__':
     animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)),\
      init_func=init, interval=100)
     plt.legend()
-    # animate.save('./smallSpread.gif',writer='imagemagick', fps=10)
+    animate.save('./smallSpread.gif',writer='imagemagick', fps=10)
 
     plt.show()
