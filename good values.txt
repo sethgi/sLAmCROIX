@@ -1,0 +1,6 @@
+good vals:
+
+n initialStateCov vel angularVel range bearing rangeSigma bearingSigma
+100 1 .025 .025 .05 .05 (only a few zero weights)
+100 4 .025 .025 .01 .001
+100 4 .025 .025 .01 .001 .075 .075

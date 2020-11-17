@@ -4,7 +4,7 @@ import copy
 import matplotlib.pyplot as plt
 
 class Particle:
-    def __init__(self, n, state=[0,0,0], data = None, id = 0):
+    def __init__(self, n, state=[0,0,0], map = None, id = 0):
 
         self.robotState = state#x,y,theta
         self.robotState[2] = self.wrapToPi(self.robotState[2])
@@ -15,22 +15,41 @@ class Particle:
         self.landmarkEKFs = {}
 
         # .01, .01
-        self.velocitySigma = 0.1
-        self.angleSigma = 0.1
+        self.velocitySigma = 0.025
+        self.angleSigma = 0.025
 
         self.X_IDX = 0
         self.Y_IDX = 1
         self.THETA_IDX = 2
 
         self.n = n
-        self.map = data.map
+        self.map = map
 
         self.id = id
 
+        self.thetaWeight = 1
+
+
+    def copy(self):
+        robotState = copy.deepcopy(self.robotState)
+        weight = self.weight
+        landmarkEKFs = copy.deepcopy(self.landmarkEKFs)
+        n = self.n
+        map = self.map
+
+        p = Particle(n, robotState, map, self.id)
+        p.landmarkEKFs = landmarkEKFs
+
+        return p
+
     # Control =
-    def propagateMotion(self, control, dt):
+    def propagateMotion(self, control, thetaMeas, dt):
         velocity = control[1] + np.random.normal(0, self.velocitySigma)
+        velocity = max(0, velocity)
+
         angularVelocity = control[2] + np.random.normal(0, self.angleSigma)
+
+        thetaMeas += np.random.normal(0, self.angleSigma)
 
         xVel = velocity*np.cos(self.robotState[self.THETA_IDX])
         yVel = velocity*np.sin(self.robotState[self.THETA_IDX])
@@ -40,7 +59,8 @@ class Particle:
 
         dTheta = angularVelocity*dt
         self.robotState[self.THETA_IDX] += angularVelocity*dt
-        self.robotState[self.THETA_IDX] = self.wrapToPi(self.robotState[self.THETA_IDX])
+
+        self.robotState[self.THETA_IDX] = self.wrapToPi(thetaMeas)
 
     # Measurement = [time, subject, range, bearing]
     def correct(self, measurement):
@@ -48,7 +68,7 @@ class Particle:
         range = measurement[2]
         bearing = measurement[3]
 
-        if subject <= 5:
+        if subject < 5:
             raise Exception("Invalid Subject")
         truth = self.map[subject]
         truth = [truth["X"], truth["Y"]]

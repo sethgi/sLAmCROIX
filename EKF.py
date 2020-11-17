@@ -1,13 +1,8 @@
-"""
-File: EKF.py
-Author: Seth Isaacson
-Description: A general, abstract implementation of an n-dof EKF, with support
-for arbitrarily many prediction steps per correction step (and vice-versa).
-"""
-
 import numpy as np
+import math
 
 class EKF:
+
 
     def __init__(self, robotState, range, bearing):
 
@@ -18,7 +13,7 @@ class EKF:
         # Found by taking samples from robot 1 measuring landmark 11
         #   at times 1248273512.011 to 1248273518.329 (odometry was 0)
         # [.01, .001]
-        self.sigmaZ = np.diag([0.1, 0.1]) #range, bearing
+        self.sigmaZ = np.diag([.05, .025]) #range, bearing
 
         robotX = robotState[0]
         robotY = robotState[1]
@@ -45,6 +40,12 @@ class EKF:
         if th <= -np.pi:
             th += 2*np.pi
         return th
+
+    def gauss(self, x, mu, std, scale):
+        a = scale * 1/(std*math.sqrt(2*math.pi))
+        b = -0.5/(std**2)
+        g = a*math.exp(b*(x-mu)**2)
+        return g
 
     def setMeasurementCovariance(self, cov):
         self.sigmaZ = cov
@@ -99,28 +100,14 @@ class EKF:
 
         diff = zt - zHat
 
-        # https://stackoverflow.com/questions/7570808/how-do-i-calculate-the-difference-of-two-angle-measures/30887154
-        # angleDist = abs(zt[1] - zHat[1])%2*np.pi
-        # if angleDist > np.pi:
-        #     angleDist = 2*np.pi - angleDist
-        # sign = 1 if (zt[1] - zHat[1] >= 0 and zt[1] - zHat[1] <= np.pi) or \
-        #        (zt[1] - zHat[1] <=-np.pi and zt[1]- zHat[1]>= -2*np.pi)  \
-        #        else  -1
-        # angleDist *= sign
-
         diff[1] = self.wrapToPi(diff[1])
-        # print("expected: ", zHat, "Actual: ", zt)
+
         self.stateEstimate = self.stateEstimate + K@(diff)
         self.stateCovariance = (np.identity(2) - K @ H) @ self.stateCovariance
 
-        self.stateEstimate = truth
+        # self.stateEstimate = truth
 
         weight = np.linalg.det(2*np.pi*Q)**-.5 * \
                     np.exp(-.5*(diff).T @ Qinv @ (diff))
 
-        # print("Actual: ", zt.reshape((1,2)), " Expected: ", zHat.reshape((1,2)))
-        # print(np.exp(-.5*(zt-zHat).T @ Qinv @ (zt-zHat)))
-
-        # Note: Notation on z is inconsistent on p. 450
-        # print("weight ", weight)
         return weight

@@ -9,6 +9,9 @@ import copy
 from matplotlib.patches import Ellipse
 import matplotlib.transforms as transforms
 import matplotlib.animation as animation
+from tqdm import tqdm
+
+ROBOT_ID = 1
 
 class State:
     def __init__(self):
@@ -35,31 +38,52 @@ class FastSLAM:
         self.createParticles(self.n)
 
         # once every this many time steps, record the entire state (SLOW!)
-        self.estimateSnapshotInterval = 10
+        self.estimateSnapshotInterval = 75
         self.snapshotCounter = 0
+
+        self.thetaSigma = .2
+
+    def wrapToPi(self, th):
+        th = np.fmod(th, 2*np.pi)
+        if th >= np.pi:
+            th -= 2*np.pi
+
+        if th <= -np.pi:
+            th += 2*np.pi
+        return th
 
     def createParticles(self, n):
         for i in range(n):
             # x = np.random.rand()*10-5
             # y = np.random.rand()*10-5
             # theta = (np.random.rand()*2*np.pi)-np.pi
-            x = 3.5732324
-            y = -3.3328387
-            theta = 2.3408
-            p = Particle(self.n, [x,y,theta], self.data, i)
-            self.particles.append(p)
-        self.stateEstimates.append(self.particles)
+            groundTruthStart = self.data.robots[ROBOT_ID].groundTruthPosition[0]
+            x = groundTruthStart[1]
+            y = groundTruthStart[2]
+            theta = groundTruthStart[3]
+            p = Particle(self.n, [x,y,theta], self.data.map, i)
+            self.particles.append(p.copy())
+        # self.stateEstimates.append(self.particles)
+
+
+    def gauss(self, x, mu, std):
+        a = 1/(std*np.sqrt(2*np.pi))
+        b = -0.5/(std**2)
+        g = a*np.exp(b*(x-mu)**2)
+        return g
+
 
     def runFastSLAM(self):
-        robot1Data = self.data.robots[0]
+        robot1Data = self.data.robots[ROBOT_ID]
 
         dt = 0
         prevOdomTime = robot1Data.odometry[0][0]
 
-        count = 0
-        while not robot1Data.empty() and count < 10000:
-            print(count, robot1Data.size())
-            count += 1
+        # count = 0
+        size = copy.deepcopy(robot1Data.size())
+        for i in tqdm(range(30000)):
+            # print(count, robot1Data.size())
+            # count += 1
 
             keyFrame = robot1Data.getNext()
             t = keyFrame[1][0]
@@ -67,11 +91,31 @@ class FastSLAM:
             if keyFrame[0] == 'odometry':
                 odometry = keyFrame[1]
                 dt = t - prevOdomTime
+                prevOdomTime = t
+
                 # print("===== Particle states =====")
                 for p in self.particles:
-                    p.propagateMotion(odometry, dt)
-                    # print(p.robotState)
-                prevOdomTime = t
+
+                    thetaMeas = self.wrapToPi(robot1Data.getCompass(t))
+
+                    p.propagateMotion(odometry, thetaMeas, dt)
+
+
+                    # Local correction on compass measurement
+                    # p.thetaWeight = self.gauss(thetaMeas, self.wrapToPi(p.robotState[2]), self.thetaSigma)
+
+                # Resample based on theta weights
+                # weights = [p.thetaWeight for p in self.particles]
+                # weightSum = sum(weights)
+                # if weightSum == 0:
+                #     print("Weights 0 in theta")
+                #     weights = [1/self.n for _ in range(self.n)]
+                # else:
+                #     weights = [w/weightSum for w in weights]
+                # particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
+                # # print(particleIndices)
+                # self.particles = [self.particles[i].copy() for i in particleIndices]
+
             else:
                 measurement = keyFrame[1]
                 subject = measurement[1]
@@ -91,7 +135,7 @@ class FastSLAM:
 
                     particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
                     # print(particleIndices)
-                    self.particles = [copy.deepcopy(self.particles[i]) for i in particleIndices]
+                    self.particles = [self.particles[i].copy() for i in particleIndices]
                     # print([p.id for p in self.particles])
             self.stateLogs.append(copy.deepcopy(self.getStateAvg()))
 
@@ -127,18 +171,18 @@ class FastSLAM:
         yPos = [p.robotState[1] for p in self.particles]
         thPos = [p.robotState[2] for p in self.particles]
 
-        # TODO: Hack because all EKFS have ground truth right now
-        for landmark in self.particles[0].landmarkEKFs:
-            position = self.particles[0].landmarkEKFs[landmark].stateEstimate
-            state.landmarks[landmark] = position
 
+        for landmark in self.particles[0].landmarkEKFs:
+            x = np.average([p.landmarkEKFs[landmark].stateEstimate[0] for p in self.particles] )
+            y = np.average([p.landmarkEKFs[landmark].stateEstimate[1] for p in self.particles] )
+            state.landmarks[landmark] = (x,y)
         state.robotState = [np.average(xPos), np.average(yPos), np.average(thPos)]
         return state
 
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", 25)
+    slam = FastSLAM("Jar/dataset1.pkl", 100)
     slam.runFastSLAM()
 
     stateEstimates = slam.stateLogs
@@ -148,7 +192,7 @@ if __name__ == '__main__':
     thetaData = [s.robotState[2] for s in stateEstimates]
 
 
-    groundTruth = slam.data.robots[0].groundTruthPosition
+    groundTruth = slam.data.robots[ROBOT_ID].groundTruthPosition
 
 
     def wrapToPi(th):
@@ -170,11 +214,20 @@ if __name__ == '__main__':
     # Plotting Yaw
 
     minTime = min(slam.timeSeries[0], timeTruth[0])
-    plt.plot(np.array(slam.timeSeries)-minTime, thetaData, label="Estimated Angle")
+    plt.plot(np.array(slam.timeSeries)-minTime, np.array(thetaData), label="Estimated Angle")
     plt.plot(np.array(timeTruth)-minTime, theTruth, label="Ground Truth Angle")
+
+
+
+    odometryTime = [s[0] for s in slam.data.robots[ROBOT_ID].odometry]
+    odometryTheta = [slam.data.robots[ROBOT_ID].getCompass(t) for t in odometryTime]
+
+    plt.plot(np.array(odometryTime)-minTime, odometryTheta, label="INterp")
+
     plt.title("Theta Tracking")
     plt.xlabel("Time (s)")
     plt.ylabel("Heading (rad)")
+    plt.legend()
 
     plt.figure()
     plt.plot(xData, yData, label="Estimated Path")
@@ -183,10 +236,10 @@ if __name__ == '__main__':
     landmarks = stateEstimates[-1].landmarks
     xLandmarks = []
     yLandmarks = []
-    #
-    # for l in landmarks:
-    #     xLandmarks.append(landmarks[l][0])
-    #     yLandmarks.append(landmarks[l][1])
+
+    for l in landmarks:
+        xLandmarks.append(landmarks[l][0])
+        yLandmarks.append(landmarks[l][1])
 
     xLandmarksTrue = []
     yLandmarksTrue = []
@@ -238,6 +291,6 @@ if __name__ == '__main__':
     animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)),\
      init_func=init, interval=100)
     plt.legend()
-    # animate.save('./correctBad.gif',writer='imagemagick', fps=10)
+    # animate.save('./smallSpread.gif',writer='imagemagick', fps=10)
 
     plt.show()

@@ -1,14 +1,11 @@
-"""
-File: DataLoader.py
-Description: Reads data from the UTIAS dataset and provides classes to interact with data
-Authors: Seth Isaacson
-"""
 import pandas as pd
 import argparse
 import os
 import copy
 import numpy as np
 import pickle
+import scipy.interpolate as interp
+import matplotlib.pyplot as plt
 
 class Map:
     def __init__(self, data):
@@ -56,9 +53,19 @@ class Robot:
     def reset(self):
         self.dataQueue = copy.deepcopy(self.robotData)
 
+    def getCompass(self, t):
+        if t < self.groundTruthTimes[0]:
+            return self.groundTruthCompass[0]
+        if t > self.groundTruthTimes[-1]:
+            return self.groundTruthCompass[-1]
+        return self.compassInterp(t)
+
+
     def buildDict(self):
         self.dataQueue = []
         self.dataDict = {}
+        self.groundTruthCompass = []
+        self.groundTruthTimes = []
         barcodeDict = {}
 
         for row in self.barcodesDF.itertuples():
@@ -69,17 +76,23 @@ class Robot:
             x = row.X
             y = row.Y
             heading = row.Heading
+            self.groundTruthCompass.append(heading)
+            self.groundTruthTimes.append(time)
+
             self.groundTruthPosition.append((time,x,y,heading))
 
         i = 0
-        groundTruthTimes = np.asarray([g[0] for g in self.groundTruthPosition])
+        self.compassInterp = interp.interp1d(self.groundTruthTimes, self.groundTruthCompass, assume_sorted = True)
+
+
         for row in self.odometryDF.itertuples():
             time = row.Time
-            # yawIdx = np.abs(groundTruthTimes - time).argmin()
-            # groundTruthYaw = self.groundTruthPosition[yawIdx][3]
-            #
-            # # Rounded up from what was found with lab 3 data:
-            # yawMeas = groundTruthYaw + np.random.normal(0, 0.001)
+
+
+            if time > self.groundTruthTimes[-1]:
+                compass = self.groundTruthCompass[-1]
+            else:
+                compass = self.compassInterp(time)
 
             self.odometry.append((time, row.Velocity, row.AngularVelocity))
 
@@ -94,7 +107,7 @@ class Robot:
                 subject = barcodeDict[barcode]
 
             time = row.Time
-            self.measurements.append((time, subject, row.Range, -1*row.Bearing))
+            self.measurements.append((time, subject, row.Range, row.Bearing))
 
         # Merge measurements and odometry
         odomPtr = 0
@@ -186,7 +199,17 @@ if __name__ == '__main__':
     parser.add_argument('directory', type=str, help='Directory with input files')
 
     args = parser.parse_args()
+
+
     data = Data(args.directory)
+
+
+    t = np.linspace(start=data.robots[0].groundTruthTimes[0], stop=data.robots[0].groundTruthTimes[-1], num=1000)
+    c = [data.robots[0].compassInterp(p) for p in t]
+    plt.plot(data.robots[0].groundTruthTimes, data.robots[0].groundTruthCompass, label="Ground Truth")
+    plt.plot(t, c)
+    # plt.show()
+
     pickle.dump(data, open("Jar/dataset1.pkl", "wb"))
     #
     # robotData = data.robots[0]
