@@ -10,10 +10,12 @@ from matplotlib.patches import Ellipse
 import matplotlib.transforms as transforms
 import matplotlib.animation as animation
 from tqdm import tqdm
+import scipy.interpolate as interp
+
 
 ROBOT_ID = 0
-NUM_STEPS = 5000
-NUM_PARTS = 500
+NUM_STEPS = 15000
+NUM_PARTS = 1
 
 class State:
     def __init__(self):
@@ -40,10 +42,8 @@ class FastSLAM:
         self.createParticles(self.n)
 
         # once every this many time steps, record the entire state (SLOW!)
-        self.estimateSnapshotInterval = 75
+        self.estimateSnapshotInterval = 200
         self.snapshotCounter = 0
-
-        self.thetaSigma = .2
 
     def wrapToPi(self, th):
         th = np.fmod(th, 2*np.pi)
@@ -101,34 +101,35 @@ class FastSLAM:
                     thetaMeas = self.wrapToPi(robot1Data.getCompass(t))
                     p.propagateMotion(odometry, thetaMeas, dt)
 
-            else:
-                measurement = keyFrame[1]
-                subject = measurement[1]
-                if subject > 5:
-                    for p in self.particles:
-                        p.correct(measurement)
-
-                    weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
-                    weightSum = sum(weights)
-                    if weightSum != 0:
-                        for i in range(len(weights)):
-                            weights[i] /= weightSum
-                    else:
-                        print("Weights were zero!!")
-                        # exit()
-                        weights = [1/self.n for _ in range(self.n)]
-
-                    particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
-                    # print(particleIndices)
-                    self.particles = [self.particles[i].copy() for i in particleIndices]
-                    # print([p.id for p in self.particles])
+            # else:
+            #     measurement = keyFrame[1]
+            #     subject = measurement[1]
+            #     if subject > 5:
+            #         for p in self.particles:
+            #             p.correct(measurement)
+            #
+            #         weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
+            #         weightSum = sum(weights)
+            #         if weightSum != 0:
+            #             for i in range(len(weights)):
+            #                 weights[i] /= weightSum
+            #         else:
+            #             print("Weights were zero!!")
+            #             # exit()
+            #             weights = [1/self.n for _ in range(self.n)]
+            #
+            #         particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
+            #         # print(particleIndices)
+            #         self.particles = [self.particles[i].copy() for i in particleIndices]
+            #         # print([p.id for p in self.particles])
             self.stateLogs.append(copy.deepcopy(self.getStateAvg()))
 
             self.timeSeries.append(t)
 
             if self.snapshotCounter == self.estimateSnapshotInterval:
                 self.snapshotCounter = 0
-                self.stateEstimates.append(copy.deepcopy(self.particles))
+                particleSet = [p.copy() for p in self.particles]
+                self.stateEstimates.append(particleSet)
             self.snapshotCounter += 1
 
     def runSlowSLAM(self):
@@ -165,10 +166,30 @@ class FastSLAM:
         return state
 
 
+def rms(truth, estimate):
+    if len(truth) != len(estimate):
+        print("RMS is weird when arrays aren't same length")
+
+    errors = [truth[i] - estimate[i] for i in range(len(truth))]
+    return np.sqrt(sum(e**2 for e in errors)/len(errors))
+
+def euclid(x, xt, y, yt):
+    return np.sqrt((x-xt)**2 + (y-yt)**2)
+
+def euclidRMS(xTruth, xEstimate, yTruth, yEstimate):
+    errors = [euclid(xEstimate[i], xTruth[i], yEstimate[i], yTruth[i]) for i in range(len(xTruth))]
+    return np.sqrt(sum(e**2 for e in errors)/len(errors))
+
 
 if __name__ == '__main__':
     slam = FastSLAM("Jar/dataset1.pkl", NUM_PARTS)
     slam.runFastSLAM()
+    # pickle.dump(slam, open('slam.pkl', 'wb'))
+
+    # data = pickle.load(open("Jar/dataset1.pkl", 'rb'))
+    #
+    # slam = pickle.load(open('slam.pkl', "rb"))
+
 
     stateEstimates = slam.stateLogs
 
@@ -207,27 +228,49 @@ if __name__ == '__main__':
     odometryTime = [s[0] for s in slam.data.robots[ROBOT_ID].odometry]
     odometryTheta = [slam.data.robots[ROBOT_ID].getCompass(t) for t in odometryTime]
 
-    plt.plot(np.array(odometryTime)-minTime, odometryTheta, label="INterp")
-
     plt.title("Theta Tracking")
     plt.xlabel("Time (s)")
     plt.ylabel("Heading (rad)")
     plt.legend()
 
+    theTruthInterp = [slam.data.robots[0].getCompass(t) for t in slam.timeSeries]
+    thetaRMS = rms(theTruthInterp, thetaData)
+    thRmsMessage = "Theta RMS (rad): {}".format(thetaRMS)
+    plt.annotate(thRmsMessage, xy=(0.05, 0.95), xycoords="axes fraction")
+
     plt.figure()
 
     plt.plot(np.array(slam.timeSeries)-minTime, xData, label="X Estimate")
     plt.plot(np.array(timeTruth) - minTime, xTruth, label="X Truth")
+    plt.xlabel("Time (s)")
+    plt.ylabel("X (m)")
 
+    xTruthInterp = [slam.data.robots[0].getXTruth(t) for t in slam.timeSeries]
+    xRMS = rms(xTruthInterp, xData)
+    # plt.plot(np.array(slam.timeSeries)-minTime, xTruthInterp, label="Interp Truth")
+    xRmsMessage = "X RMS (m): {}".format(xRMS)
+    plt.annotate(xRmsMessage, xy=(0.05, 0.95), xycoords="axes fraction")
+    plt.legend()
     plt.figure()
+
+    yTruthInterp = [slam.data.robots[0].getYTruth(t) for t in slam.timeSeries]
 
     plt.plot(np.array(slam.timeSeries)-minTime, yData, label="Y Estimate")
     plt.plot(np.array(timeTruth) - minTime, yTruth, label="Y Truth")
+    # plt.plot(np.array(slam.timeSeries)-minTime, yTruthInterp, label="Interp Truth")
 
+    plt.xlabel("Time (s)")
+    plt.ylabel("Y (m)")
+
+    yRMS = rms(yTruthInterp, yData)
+    yRmsMessage = "Y RMS (m): {}".format(yRMS)
+    plt.annotate(yRmsMessage, xy=(0.05, 0.95), xycoords="axes fraction")
+    plt.legend()
     plt.figure()
 
     plt.plot(xData, yData, label="Estimated Path")
-    plt.plot(xTruth[0:len(xTruth)//2], yTruth[0:len(yTruth)//2], label="True Path")
+    plt.plot(xTruth, yTruth, label="True Path")
+
 
     landmarks = stateEstimates[-1].landmarks
     xLandmarks = []
@@ -246,13 +289,19 @@ if __name__ == '__main__':
         xLandmarksTrue.append(lm["X"])
         yLandmarksTrue.append(lm["Y"])
 
+
+    pathRMS = euclidRMS(xTruthInterp, xData, yTruthInterp, yData)
+    pathRmsMessage = "Path RMS (m): {}".format(pathRMS)
+    plt.annotate(pathRmsMessage, xy=(0.05, 0.95), xycoords="axes fraction")
+
+
     plt.scatter(xLandmarks, yLandmarks, label="Estimated Landmarks", color='g')
     plt.scatter(xLandmarksTrue, yLandmarksTrue, label="Ground Truth Landmarks", color='r')
     plt.xlabel("X (meters)")
     plt.ylabel("Y (meters)")
     plt.title("SLAM Results")
     plt.legend()
-    plt.show()
+    # plt.show()
 
     """
     Animation
@@ -260,7 +309,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
 
     ln, = plt.plot([], [], '.')
-    lnLandmarks = plt.scatter([], [])#, marker='.',color="green", markersize=5)
+    lnLandmarks = plt.scatter([], [], label="Estimated Landmarks")#, marker='.',color="green", markersize=5)
 
 
     plt.plot(xData, yData, label="Estimated Path")
@@ -279,11 +328,12 @@ if __name__ == '__main__':
     # return ln,
     # print(len(slam.stateEstimates))
     def update(frame):
-        particles = slam.stateEstimates[frame]
+        f = frame*3
+        particles = slam.stateEstimates[f]
         ln.set_xdata([p.robotState[0] for p in particles])
         ln.set_ydata([p.robotState[1] for p in particles])
 
-        landmarks = slam.stateLogs[frame*slam.estimateSnapshotInterval].landmarks
+        landmarks = slam.stateLogs[f*slam.estimateSnapshotInterval].landmarks
         xLandmarks = []
         yLandmarks = []
 
@@ -294,10 +344,10 @@ if __name__ == '__main__':
         lnLandmarks.set_offsets(np.c_[xLandmarks, yLandmarks])
         return fig,
 
-    animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)),\
+    animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)//3),\
      init_func=init, interval=100)
     plt.legend()
 
-    # animate.save('./fullSlip.gif',writer='imagemagick', fps=10)
+    # animate.save('./muchBetter.gif',writer='imagemagick', fps=10)
 
     plt.show()

@@ -88,8 +88,8 @@ class EKF:
 
         Q = H @ self.stateCovariance @ H.T + self.sigmaZ
 
-        if np.linalg.matrix_rank(Q) != 2:
-            raise Exception("Singular whoopsies")
+        # if np.linalg.matrix_rank(Q) != 2:
+        #     raise Exception("Singular whoopsies")
         Qinv = np.linalg.inv(Q)
 
         # print("Q: ", Q)
@@ -102,8 +102,8 @@ class EKF:
 
         diff[1] = self.wrapToPi(diff[1])
 
-        weightRange = self.gauss(zt[0], zHat[0], .075, 1)
-        weightBearing = self.gauss(zt[1], zHat[1], .025, 1)
+        weightRange = self.gauss(zt[0], zHat[0], .03, 1)
+        weightBearing = self.gauss(zt[1], zHat[1], .015, 1)
         weight = weightRange * weightBearing
 
         self.stateEstimate = self.stateEstimate + K@(diff)

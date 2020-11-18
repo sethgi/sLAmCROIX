@@ -60,11 +60,26 @@ class Robot:
             return self.groundTruthCompass[-1]
         return self.compassInterp(t)
 
+    def getXTruth(self, t):
+        if t < self.groundTruthTimes[0]:
+            return self.groundTruthX[0]
+        if t > self.groundTruthTimes[-1]:
+            return self.groundTruthX[-1]
+        return self.xInterp(t)
+
+    def getYTruth(self, t):
+        if t < self.groundTruthTimes[0]:
+            return self.groundTruthY[0]
+        if t > self.groundTruthTimes[-1]:
+            return self.groundTruthY[-1]
+        return self.yInterp(t)
 
     def buildDict(self):
         self.dataQueue = []
         self.dataDict = {}
         self.groundTruthCompass = []
+        self.groundTruthX = []
+        self.groundTruthY = []
         self.groundTruthTimes = []
         barcodeDict = {}
 
@@ -75,6 +90,8 @@ class Robot:
             time = row.Time
             x = row.X
             y = row.Y
+            self.groundTruthX.append(x)
+            self.groundTruthY.append(y)
             heading = row.Heading
             self.groundTruthCompass.append(heading)
             self.groundTruthTimes.append(time)
@@ -83,7 +100,8 @@ class Robot:
 
         i = 0
         self.compassInterp = interp.interp1d(self.groundTruthTimes, self.groundTruthCompass, assume_sorted = True)
-
+        self.xInterp = interp.interp1d(self.groundTruthTimes, self.groundTruthX, assume_sorted=True)
+        self.yInterp = interp.interp1d(self.groundTruthTimes, self.groundTruthY, assume_sorted=True)
 
         for row in self.odometryDF.itertuples():
             time = row.Time
@@ -93,6 +111,7 @@ class Robot:
                 compass = self.groundTruthCompass[-1]
             else:
                 compass = self.compassInterp(time)
+            compass += np.random.normal(0, 0.005)
 
             self.odometry.append((time, row.Velocity, row.AngularVelocity))
 
