@@ -13,7 +13,7 @@ class EKF:
         # Found by taking samples from robot 1 measuring landmark 11
         #   at times 1248273512.011 to 1248273518.329 (odometry was 0)
         # [.01, .001]
-        self.sigmaZ = np.diag([.001, .001]) #range, bearing
+        self.sigmaZ = np.diag([.075, .025]) #range, bearing
 
         robotX = robotState[0]
         robotY = robotState[1]
@@ -25,7 +25,7 @@ class EKF:
 
         # Running estimate
         self.stateEstimate = np.reshape(np.array([x,y]), (2,1))
-        self.stateCovariance = np.ones((self.n, self.n))
+        self.stateCovariance = np.ones((self.n, self.n))*.01
 
 
         self.stateEstimateLogs = []
@@ -102,12 +102,16 @@ class EKF:
 
         diff[1] = self.wrapToPi(diff[1])
 
+        weightRange = self.gauss(zt[0], zHat[0], .075, 1)
+        weightBearing = self.gauss(zt[1], zHat[1], .025, 1)
+        weight = weightRange * weightBearing
+
         self.stateEstimate = self.stateEstimate + K@(diff)
         self.stateCovariance = (np.identity(2) - K @ H) @ self.stateCovariance
 
         # self.stateEstimate = truth
 
-        weight = np.linalg.det(2*np.pi*Q)**-.5 * \
-                    np.exp(-.5*(diff).T @ Qinv @ (diff))
+        # weight = np.linalg.det(2*np.pi*Q)**-.5 * \
+        #             np.exp(-.5*(diff).T @ Qinv @ (diff))
 
         return weight

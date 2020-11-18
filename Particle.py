@@ -1,6 +1,7 @@
 import numpy as np
 from EKF import EKF
 import copy
+from scipy.stats import skewnorm
 import matplotlib.pyplot as plt
 
 class Particle:
@@ -15,9 +16,9 @@ class Particle:
         self.landmarkEKFs = {}
 
         # .01, .01
-        self.velocitySigma = 0.005
-        self.angleSigma = 0.005
-        self.slipSigma = 0.045
+        self.velocitySigma = 0.05
+        self.angleSigma = 0.003
+        self.slipSigma = 0.075
 
         self.X_IDX = 0
         self.Y_IDX = 1
@@ -45,7 +46,7 @@ class Particle:
 
     # Control =
     def propagateMotion(self, control, thetaMeas, dt):
-        velocity = control[1] + np.random.normal(0, self.velocitySigma)
+        velocity = control[1] + skewnorm.rvs(-.16, 0, self.velocitySigma)
         velocity = max(0, velocity)
 
         slipVel = np.random.normal(0, self.slipSigma)

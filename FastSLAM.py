@@ -12,6 +12,8 @@ import matplotlib.animation as animation
 from tqdm import tqdm
 
 ROBOT_ID = 0
+NUM_STEPS = 5000
+NUM_PARTS = 500
 
 class State:
     def __init__(self):
@@ -82,7 +84,7 @@ class FastSLAM:
         # count = 0
         size = copy.deepcopy(robot1Data.size())
         print(size)
-        for i in tqdm(range(20000)):
+        for i in tqdm(range(NUM_STEPS)):
             # print(count, robot1Data.size())
             # count += 1
 
@@ -96,26 +98,8 @@ class FastSLAM:
 
                 # print("===== Particle states =====")
                 for p in self.particles:
-
                     thetaMeas = self.wrapToPi(robot1Data.getCompass(t))
-
                     p.propagateMotion(odometry, thetaMeas, dt)
-
-
-                    # Local correction on compass measurement
-                    # p.thetaWeight = self.gauss(thetaMeas, self.wrapToPi(p.robotState[2]), self.thetaSigma)
-
-                # Resample based on theta weights
-                # weights = [p.thetaWeight for p in self.particles]
-                # weightSum = sum(weights)
-                # if weightSum == 0:
-                #     print("Weights 0 in theta")
-                #     weights = [1/self.n for _ in range(self.n)]
-                # else:
-                #     weights = [w/weightSum for w in weights]
-                # particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
-                # # print(particleIndices)
-                # self.particles = [self.particles[i].copy() for i in particleIndices]
 
             else:
                 measurement = keyFrame[1]
@@ -183,7 +167,7 @@ class FastSLAM:
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", 100)
+    slam = FastSLAM("Jar/dataset1.pkl", NUM_PARTS)
     slam.runFastSLAM()
 
     stateEstimates = slam.stateLogs
@@ -231,8 +215,19 @@ if __name__ == '__main__':
     plt.legend()
 
     plt.figure()
+
+    plt.plot(np.array(slam.timeSeries)-minTime, xData, label="X Estimate")
+    plt.plot(np.array(timeTruth) - minTime, xTruth, label="X Truth")
+
+    plt.figure()
+
+    plt.plot(np.array(slam.timeSeries)-minTime, yData, label="Y Estimate")
+    plt.plot(np.array(timeTruth) - minTime, yTruth, label="Y Truth")
+
+    plt.figure()
+
     plt.plot(xData, yData, label="Estimated Path")
-    plt.plot(xTruth, yTruth, label="True Path")
+    plt.plot(xTruth[0:len(xTruth)//2], yTruth[0:len(yTruth)//2], label="True Path")
 
     landmarks = stateEstimates[-1].landmarks
     xLandmarks = []
@@ -265,6 +260,7 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
 
     ln, = plt.plot([], [], '.')
+    lnLandmarks = plt.scatter([], [])#, marker='.',color="green", markersize=5)
 
 
     plt.plot(xData, yData, label="Estimated Path")
@@ -275,7 +271,6 @@ if __name__ == '__main__':
 
     def init():
         plt.scatter(xLandmarksTrue, yLandmarksTrue, label="Ground Truth Landmarks", color='r')
-        plt.scatter(xLandmarks, yLandmarks, label="Estimated Landmarks", color='g')
         plt.plot(xData, yData, label="Estimated Path")
         plt.plot(xTruth, yTruth, label="True Path")
         plt.xlabel("X Coordinate (m)")
@@ -287,11 +282,22 @@ if __name__ == '__main__':
         particles = slam.stateEstimates[frame]
         ln.set_xdata([p.robotState[0] for p in particles])
         ln.set_ydata([p.robotState[1] for p in particles])
+
+        landmarks = slam.stateLogs[frame*slam.estimateSnapshotInterval].landmarks
+        xLandmarks = []
+        yLandmarks = []
+
+        for l in landmarks:
+            xLandmarks.append(landmarks[l][0])
+            yLandmarks.append(landmarks[l][1])
+
+        lnLandmarks.set_offsets(np.c_[xLandmarks, yLandmarks])
         return fig,
 
     animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)),\
      init_func=init, interval=100)
     plt.legend()
-    animate.save('./smallSpread.gif',writer='imagemagick', fps=10)
+
+    # animate.save('./fullSlip.gif',writer='imagemagick', fps=10)
 
     plt.show()

@@ -1,6 +1,6 @@
 good vals:
 
-n initialStateCov vel angularVel range bearing rangeSigma bearingSigma
+n initialStateCov vel angularVel (slip) range bearing skew
 100 1 .025 .025 .05 .05 (only a few zero weights)
 100 4 .025 .025 .01 .001
 100 4 .025 .025 .01 .001 .075 .075
@@ -9,3 +9,8 @@ dataset3, robot0
 200 .25 .05 .15 .001 .003 (localization only )
 100 .25 .05 .15 .001 .003 (localization only )
 100 2 .05 .15 .001 .003 (slam, n=9,000)
+250 1 .01 .01 (.05) .01 .002
+
+---
+n    initCov  vel angle  slip  range  bearing  skew
+100    .01   .05  .003   .075   .01    .003    -.16
