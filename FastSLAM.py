@@ -12,18 +12,16 @@ import matplotlib.animation as animation
 from tqdm import tqdm
 import scipy.interpolate as interp
 
-
-ROBOT_ID = 0
 NUM_STEPS = 15000
 NUM_PARTS = 1
-
+ROBOT_ID = 2
 class State:
     def __init__(self):
         self.robotState = None
         self.landmarks = {}
 
 class FastSLAM:
-    def __init__(self, pkl, n):
+    def __init__(self, pkl, n, id):
         self.data = pickle.load(open(pkl, "rb"))
         self.n = n
         self.xRange = (-5, 5)
@@ -39,11 +37,14 @@ class FastSLAM:
 
         self.stateEstimates = []
 
-        self.createParticles(self.n)
 
         # once every this many time steps, record the entire state (SLOW!)
         self.estimateSnapshotInterval = 200
         self.snapshotCounter = 0
+
+        self.robotId = id
+
+        self.createParticles(self.n)
 
     def wrapToPi(self, th):
         th = np.fmod(th, 2*np.pi)
@@ -59,7 +60,7 @@ class FastSLAM:
             # x = np.random.rand()*10-5
             # y = np.random.rand()*10-5
             # theta = (np.random.rand()*2*np.pi)-np.pi
-            groundTruthStart = self.data.robots[ROBOT_ID].groundTruthPosition[0]
+            groundTruthStart = self.data.robots[self.robotId].groundTruthPosition[0]
             x = groundTruthStart[1]
             y = groundTruthStart[2]
             theta = groundTruthStart[3]
@@ -76,7 +77,7 @@ class FastSLAM:
 
 
     def runFastSLAM(self):
-        robot1Data = self.data.robots[ROBOT_ID]
+        robot1Data = self.data.robots[self.robotId]
 
         dt = 0
         prevOdomTime = robot1Data.odometry[0][0]
@@ -182,7 +183,7 @@ def euclidRMS(xTruth, xEstimate, yTruth, yEstimate):
 
 
 if __name__ == '__main__':
-    slam = FastSLAM("Jar/dataset1.pkl", NUM_PARTS)
+    slam = FastSLAM("Jar/dataset1.pkl", NUM_PARTS, ROBOT_ID)
     slam.runFastSLAM()
     # pickle.dump(slam, open('slam.pkl', 'wb'))
 
@@ -225,8 +226,8 @@ if __name__ == '__main__':
 
 
 
-    odometryTime = [s[0] for s in slam.data.robots[ROBOT_ID].odometry]
-    odometryTheta = [slam.data.robots[ROBOT_ID].getCompass(t) for t in odometryTime]
+    odometryTime = [s[0] for s in slam.data.robots[slam.robotId].odometry]
+    odometryTheta = [slam.data.robots[slam.robotId].getCompass(t) for t in odometryTime]
 
     plt.title("Theta Tracking")
     plt.xlabel("Time (s)")
