@@ -13,7 +13,7 @@ class EKF:
         # Found by taking samples from robot 1 measuring landmark 11
         #   at times 1248273512.011 to 1248273518.329 (odometry was 0)
         # [.01, .001]
-        self.sigmaZ = np.diag([.075, .025]) #range, bearing
+        self.sigmaZ = np.diag([.01, .003]) #range, bearing
 
         robotX = robotState[0]
         robotY = robotState[1]
@@ -102,7 +102,7 @@ class EKF:
 
         diff[1] = self.wrapToPi(diff[1])
 
-        weightRange = self.gauss(zt[0], zHat[0], .03, 1)
+        weightRange = self.gauss(zt[0], zHat[0], .05, 1)
         weightBearing = self.gauss(zt[1], zHat[1], .015, 1)
         weight = weightRange * weightBearing
 

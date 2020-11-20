@@ -16,9 +16,9 @@ class Particle:
         self.landmarkEKFs = {}
 
         # .01, .01
-        self.velocitySigma = 0.04
-        self.angleSigma = 0.0125
-        self.slipSigma = 0.07
+        self.velocitySigma = 0.05
+        self.angleSigma = 0.003
+        self.slipSigma = 0.075
 
         self.X_IDX = 0
         self.Y_IDX = 1
@@ -46,19 +46,18 @@ class Particle:
 
     # Control =
     def propagateMotion(self, control, thetaMeas, dt):
-        velocity = control[1] #+ skewnorm.rvs(0, 0, self.velocitySigma)
-        velocity = max(0, velocity)
+        velocity = control[1] + skewnorm.rvs(-.16, 0, self.velocitySigma)
 
         slipVel = np.random.normal(0, self.slipSigma)
 
-        # thetaMeas += np.random.normal(0, self.angleSigma)
+        thetaMeas += np.random.normal(0, self.angleSigma)
         self.robotState[self.THETA_IDX] = self.wrapToPi(thetaMeas)
 
         xVel = velocity*np.cos(self.robotState[self.THETA_IDX])
         yVel = velocity*np.sin(self.robotState[self.THETA_IDX])
 
-        self.robotState[self.X_IDX] += xVel*dt #- slipVel*dt*np.sin(self.robotState[self.THETA_IDX])
-        self.robotState[self.Y_IDX] += yVel*dt #+ slipVel*dt*np.cos(self.robotState[self.THETA_IDX])
+        self.robotState[self.X_IDX] += xVel*dt - slipVel*dt*np.sin(self.robotState[self.THETA_IDX])
+        self.robotState[self.Y_IDX] += yVel*dt + slipVel*dt*np.cos(self.robotState[self.THETA_IDX])
 
 
     # Measurement = [time, subject, range, bearing]
