@@ -60,6 +60,9 @@ class Robot:
             return self.groundTruthCompass[-1]
         return self.compassInterp(t)
 
+    def getCompassNoisy(self, t):
+        return self.getCompass(t) + np.random.normal(0, 0.005)
+
     def getXTruth(self, t):
         if t < self.groundTruthTimes[0]:
             return self.groundTruthX[0]

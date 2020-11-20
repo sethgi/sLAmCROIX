@@ -13,7 +13,7 @@ from tqdm import tqdm
 import scipy.interpolate as interp
 
 NUM_STEPS = 50000
-NUM_PARTS = 200
+NUM_PARTS = 100
 ROBOT_ID = 0
 class State:
     def __init__(self):
@@ -99,7 +99,7 @@ class FastSLAM:
 
                 # print("===== Particle states =====")
                 for p in self.particles:
-                    thetaMeas = self.wrapToPi(robot1Data.getCompass(t))
+                    thetaMeas = self.wrapToPi(robot1Data.getCompassNoisy(t))
                     p.propagateMotion(odometry, thetaMeas, dt)
 
             else:
@@ -290,9 +290,16 @@ if __name__ == '__main__':
         xLandmarksTrue.append(lm["X"])
         yLandmarksTrue.append(lm["Y"])
 
+    landmarkRMS = []
+    for l in landmarks:
+        truth = slam.data.map.landmarkDict[l]
+        est = landmarks[l]
+        error = np.sqrt((truth["X"]-est[0])**2 + (truth["Y"]-est[1])**2)
+        landmarkRMS.append(error)
+    landmarkRMS = np.sqrt(sum(e**2 for e in landmarkRMS)/len(landmarkRMS))
 
     pathRMS = euclidRMS(xTruthInterp, xData, yTruthInterp, yData)
-    pathRmsMessage = "Path RMS (m): {}".format(pathRMS)
+    pathRmsMessage = f'Path RMS (m): {pathRMS}\nLandmark RMS (m): {landmarkRMS}'
     plt.annotate(pathRmsMessage, xy=(0.05, 0.95), xycoords="axes fraction")
 
 
@@ -352,6 +359,6 @@ if __name__ == '__main__':
     plt.legend(loc='lower right', framealpha=1, facecolor='white')
     plt.gca().set_aspect('equal', adjustable='box')
 
-    # animate.save('./muchBetter.gif',writer='imagemagick', fps=10)
+    # animate.save('./slam_animation.gif',writer='imagemagick', fps=10)
 
     plt.show()
