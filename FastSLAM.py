@@ -12,9 +12,9 @@ import matplotlib.animation as animation
 from tqdm import tqdm
 import scipy.interpolate as interp
 
-NUM_STEPS = 15000
-NUM_PARTS = 1
-ROBOT_ID = 2
+NUM_STEPS = 50000
+NUM_PARTS = 200
+ROBOT_ID = 0
 class State:
     def __init__(self):
         self.robotState = None
@@ -102,27 +102,27 @@ class FastSLAM:
                     thetaMeas = self.wrapToPi(robot1Data.getCompass(t))
                     p.propagateMotion(odometry, thetaMeas, dt)
 
-            # else:
-            #     measurement = keyFrame[1]
-            #     subject = measurement[1]
-            #     if subject > 5:
-            #         for p in self.particles:
-            #             p.correct(measurement)
-            #
-            #         weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
-            #         weightSum = sum(weights)
-            #         if weightSum != 0:
-            #             for i in range(len(weights)):
-            #                 weights[i] /= weightSum
-            #         else:
-            #             print("Weights were zero!!")
-            #             # exit()
-            #             weights = [1/self.n for _ in range(self.n)]
-            #
-            #         particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
-            #         # print(particleIndices)
-            #         self.particles = [self.particles[i].copy() for i in particleIndices]
-            #         # print([p.id for p in self.particles])
+            else:
+                measurement = keyFrame[1]
+                subject = measurement[1]
+                if subject > 5:
+                    for p in self.particles:
+                        p.correct(measurement)
+
+                    weights = np.array([p.weight for p in self.particles]).flatten().astype("float64")
+                    weightSum = sum(weights)
+                    if weightSum != 0:
+                        for i in range(len(weights)):
+                            weights[i] /= weightSum
+                    else:
+                        print("Weights were zero!!")
+                        # exit()
+                        weights = [1/self.n for _ in range(self.n)]
+
+                    particleIndices = np.random.choice(list(range(self.n)), self.n, replace=True, p=weights)
+                    # print(particleIndices)
+                    self.particles = [self.particles[i].copy() for i in particleIndices]
+                    # print([p.id for p in self.particles])
             self.stateLogs.append(copy.deepcopy(self.getStateAvg()))
 
             self.timeSeries.append(t)
@@ -270,7 +270,7 @@ if __name__ == '__main__':
     plt.figure()
 
     plt.plot(xData, yData, label="Estimated Path")
-    plt.plot(xTruth, yTruth, label="True Path")
+    plt.plot(xTruth[:len(xTruth)//2], yTruth[:len(yTruth)//2], label="True Path")
 
 
     landmarks = stateEstimates[-1].landmarks
@@ -301,13 +301,15 @@ if __name__ == '__main__':
     plt.xlabel("X (meters)")
     plt.ylabel("Y (meters)")
     plt.title("SLAM Results")
-    plt.legend()
+    plt.legend(loc='lower right', framealpha=1, facecolor='white')
+    plt.gca().set_aspect('equal', adjustable='box')
     # plt.show()
 
     """
     Animation
     """
     fig, ax = plt.subplots()
+    ax.set_aspect('equal', adjustable='box')
 
     ln, = plt.plot([], [], '.')
     lnLandmarks = plt.scatter([], [], label="Estimated Landmarks")#, marker='.',color="green", markersize=5)
@@ -322,10 +324,10 @@ if __name__ == '__main__':
     def init():
         plt.scatter(xLandmarksTrue, yLandmarksTrue, label="Ground Truth Landmarks", color='r')
         plt.plot(xData, yData, label="Estimated Path")
-        plt.plot(xTruth, yTruth, label="True Path")
+        plt.plot(xTruth[:len(xTruth)//2], yTruth[:len(yTruth)//2], label="True Path")
         plt.xlabel("X Coordinate (m)")
         plt.ylabel("Y Coordinate (m)")
-        plt.legend()
+        plt.legend(loc='lower right', framealpha=1, facecolor='white')
     # return ln,
     # print(len(slam.stateEstimates))
     def update(frame):
@@ -347,7 +349,8 @@ if __name__ == '__main__':
 
     animate = animation.FuncAnimation(fig, update, frames=range(len(slam.stateEstimates)//3),\
      init_func=init, interval=100)
-    plt.legend()
+    plt.legend(loc='lower right', framealpha=1, facecolor='white')
+    plt.gca().set_aspect('equal', adjustable='box')
 
     # animate.save('./muchBetter.gif',writer='imagemagick', fps=10)
 
